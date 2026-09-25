@@ -43,6 +43,7 @@ import {
   BaseFeeMode,
   CollectFeeMode,
   DynamicBondingCurveClient,
+  MigrationFeeOption,
   MigrationOption,
   SwapMode,
   TokenAuthorityOption,
@@ -135,6 +136,11 @@ async function main() {
     },
     migration: {
       migrationOption: MigrationOption.MET_DAMM_V2,
+      migrationFeeOption: MigrationFeeOption.FixedBps200, // 2% LP fee on the post-migration pool
+      migrationFee: {
+        feePercentage: 0, // no extra cut taken from the migration threshold itself
+        creatorFeePercentage: 0,
+      },
     },
     liquidityDistribution: {
       partnerLiquidityPercentage: 50,
