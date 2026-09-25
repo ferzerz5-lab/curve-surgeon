@@ -7,12 +7,14 @@
   "scripts": {
     "sim": "tsx scripts/run-scenarios.ts",
     "typecheck": "tsc --noEmit",
+    "devnet:validate": "tsx scripts/devnet-validate.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start"
   },
   "dependencies": {
-    "@meteora-ag/dynamic-bonding-curve-sdk": "^1.1.1-rc.6",
+    "@meteora-ag/dynamic-bonding-curve-sdk": "^1.5.10",
+    "@solana/spl-token": "^0.4.9",
     "@solana/web3.js": "^1.95.0",
     "bn.js": "^5.2.1",
     "next": "^14.2.0",
