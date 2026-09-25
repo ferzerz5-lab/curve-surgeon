@@ -53,7 +53,7 @@ import {
   createSqrtPrices,
   deriveDbcPoolAddress,
 } from "@meteora-ag/dynamic-bonding-curve-sdk";
-import { simulateBuy, spotPrice, type SegmentBounds } from "../src/lib/curve-math";
+import { simulateBuy, spotPrice, totalQuoteToMigrate, type SegmentBounds } from "../src/lib/curve-math";
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -213,20 +213,51 @@ async function main() {
   debugLog("Raw configState (inspect this if the bounds mapping below throws)", configState);
 
   const Q64 = 2 ** 64;
+  const BASE_DECIMAL = 6;
+  const QUOTE_DECIMAL = 9;
+
+  // Meteora's own docs give the real-price formula as:
+  //   price = (sqrtPrice_raw / 2^64)^2 * 10^(baseDecimal - quoteDecimal)
+  // Our curve-math.ts assumes spotPrice = sqrtPrice^2 with NO extra decimal
+  // factor, so to make the two conventions agree we fold that documented
+  // decimal factor into sqrtPrice itself (this part is exact, not a guess):
+  //   sqrtPrice_ours = (sqrtPrice_raw / 2^64) * sqrt(10^(baseDecimal - quoteDecimal))
+  const decimalCorrection = Math.sqrt(10 ** (BASE_DECIMAL - QUOTE_DECIMAL));
 
   const fullCurve: any[] = (configState as any).curve;
   // The on-chain curve array is fixed-size and padded with zero entries beyond
   // the real segments -- keep only the leading non-zero ones.
   const rawCurve = fullCurve.filter((point: any) => !point.sqrtPrice.isZero());
-  const startSqrtPrice = Number((configState as any).sqrtStartPrice.toString()) / Q64;
+  const startSqrtPrice =
+    (Number((configState as any).sqrtStartPrice.toString()) / Q64) * decimalCorrection;
 
-  const bounds: SegmentBounds[] = rawCurve.map((point: any, i: number) => ({
-    sqrtPriceLower: i === 0 ? startSqrtPrice : Number(rawCurve[i - 1].sqrtPrice.toString()) / Q64,
-    sqrtPriceUpper: Number(point.sqrtPrice.toString()) / Q64,
+  // Liquidity's internal scale (beyond the Q64.64 exponent) isn't published in
+  // exact form, so rather than guess it, we calibrate it against ONE real,
+  // known on-chain quantity: the pool's actual migrationQuoteThreshold. If our
+  // formula's SHAPE is right, this single calibration constant should make
+  // every subsequent buy size line up with the SDK's live quote.
+  const uncalibratedBounds: SegmentBounds[] = rawCurve.map((point: any, i: number) => ({
+    sqrtPriceLower:
+      i === 0 ? startSqrtPrice : (Number(rawCurve[i - 1].sqrtPrice.toString()) / Q64) * decimalCorrection,
+    sqrtPriceUpper: (Number(point.sqrtPrice.toString()) / Q64) * decimalCorrection,
     liquidity: Number(point.liquidity.toString()) / Q64,
   }));
 
-  console.log("\nActual on-chain curve segments (translated to our units):");
+  const ourTotalQuote = totalQuoteToMigrate(uncalibratedBounds);
+  const realThresholdSol = Number((configState as any).migrationQuoteThreshold.toString()) / 1e9;
+  const calibration = ourTotalQuote / realThresholdSol;
+
+  console.log(
+    `\nCalibrating liquidity scale against real migration threshold: ${realThresholdSol} SOL` +
+      ` (our uncalibrated model implied ${ourTotalQuote.toExponential(4)} -- calibration factor ${calibration.toExponential(4)})`
+  );
+
+  const bounds: SegmentBounds[] = uncalibratedBounds.map((b) => ({
+    ...b,
+    liquidity: b.liquidity / calibration,
+  }));
+
+  console.log("\nActual on-chain curve segments (translated + calibrated to our units):");
   console.table(bounds);
 
   // -------------------------------------------------------------------------
