@@ -212,13 +212,18 @@ async function main() {
 
   debugLog("Raw configState (inspect this if the bounds mapping below throws)", configState);
 
-  const rawCurve: any[] = (configState as any).curve;
-  const startSqrtPrice = Number((configState as any).sqrtStartPrice.toString()) / 1e9;
+  const Q64 = 2 ** 64;
+
+  const fullCurve: any[] = (configState as any).curve;
+  // The on-chain curve array is fixed-size and padded with zero entries beyond
+  // the real segments -- keep only the leading non-zero ones.
+  const rawCurve = fullCurve.filter((point: any) => !point.sqrtPrice.isZero());
+  const startSqrtPrice = Number((configState as any).sqrtStartPrice.toString()) / Q64;
 
   const bounds: SegmentBounds[] = rawCurve.map((point: any, i: number) => ({
-    sqrtPriceLower: i === 0 ? startSqrtPrice : Number(rawCurve[i - 1].sqrtPrice.toString()) / 1e9,
-    sqrtPriceUpper: Number(point.sqrtPrice.toString()) / 1e9,
-    liquidity: Number(point.liquidity.toString()) / 1e9,
+    sqrtPriceLower: i === 0 ? startSqrtPrice : Number(rawCurve[i - 1].sqrtPrice.toString()) / Q64,
+    sqrtPriceUpper: Number(point.sqrtPrice.toString()) / Q64,
+    liquidity: Number(point.liquidity.toString()) / Q64,
   }));
 
   console.log("\nActual on-chain curve segments (translated to our units):");
@@ -248,7 +253,7 @@ async function main() {
 
     const ours = simulateBuy(bounds, startSqrtPrice, sol);
 
-    const sdkBaseOut = Number((sdkQuote as any).amountOut.toString()) / 1e6; // 6 decimals for base token
+    const sdkBaseOut = Number((sdkQuote as any).outputAmount.toString()) / 1e6; // 6 decimals for base token
     const diffPct =
       sdkBaseOut === 0 ? 0 : (Math.abs(sdkBaseOut - ours.baseOut) / sdkBaseOut) * 100;
 
