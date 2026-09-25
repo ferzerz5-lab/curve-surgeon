@@ -282,7 +282,14 @@ async function main() {
       currentPoint,
     } as any);
 
-    const ours = simulateBuy(bounds, startSqrtPrice, sol);
+    // simulateBuy() is pure bonding-curve math and doesn't model trading fees
+    // (that's handled separately by fee-math.ts elsewhere in this project).
+    // The SDK's live quote correctly nets out the 2.5% (250 bps) flat fee we
+    // configured above, so we apply the same deduction here for a fair
+    // apples-to-apples comparison.
+    const TRADING_FEE_BPS = 250;
+    const netQuoteIn = sol * (1 - TRADING_FEE_BPS / 10_000);
+    const ours = simulateBuy(bounds, startSqrtPrice, netQuoteIn);
 
     const sdkBaseOut = Number((sdkQuote as any).outputAmount.toString()) / 1e6; // 6 decimals for base token
     const diffPct =
