@@ -123,8 +123,8 @@ async function main() {
         feeSchedulerParam: {
           startingFeeBps: 250, // 2.5% base fee, held flat (no scheduler decay
           endingFeeBps: 250, //  needed for this validation run -- keeps the
-          numberOfPeriod: 1, //  math we're comparing to simple).
-          totalDuration: 1,
+          numberOfPeriod: 0, //  math we're comparing to simple). SDK requires
+          totalDuration: 0, //  these to be 0 when start === end (no decay).
         },
       },
       dynamicFeeEnabled: false,
